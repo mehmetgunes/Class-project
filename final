@@ -1,0 +1,44 @@
+import pandas as pd
+import numpy as np
+import math
+import matplotlib.pyplot as plt
+
+plt.close('all')
+C=6.871
+rho=1.225
+D=0.0325
+zerofile = pd.read_csv('Zero.csv')
+zerofile["G"] = np.divide(zerofile["Vout"], zerofile["Vin"])
+Gzero = zerofile["G"].mean()
+FileInfo = pd.read_csv('FileInfo.csv')
+x_Ds = FileInfo["D"].unique()
+mdots = []
+for x_D in x_Ds:
+    Files = FileInfo[FileInfo["D"] == x_D]
+    
+    AllData = pd.DataFrame(columns=["y_D","Gain", "dP", " Velocity", "dV"])
+    
+    for f in Files["filename"]:
+        ThisDataFrame=pd.read_csv(f)
+        Gain=np.divide(ThisDataFrame["Vout"], ThisDataFrame["Vin"])
+        CorrectedGain=Gain-Gzero
+        CorrectedGain[CorrectedGain < 0] = 0
+        dP=CorrectedGain.mean() * C
+        ddP=CorrectedGain.std() * C
+        V = math.sqrt(2*dP/rho)
+        dV=math.sqrt(2*ddP/rho)
+        
+        ThisDict={"y_D": FileInfo[FileInfo["filename"] == f]["y_D"].iloc[0],\
+                  "Gain":CorrectedGain.mean(), "dP" :dP,\
+                  "Velocity":V, "dV" : dV}
+        
+        AllData=AllData.append(ThisDict, ignore_index=True)
+        
+    AllData.plot.scatter("Velocity", "y_D", xerr="dV")
+    AllData=AllData.sort_values(by=["y_D"])
+    Yint=(AllData["y_D"]-AllData["y_D"].min())*0
+    mdot=np.pi*rho*np.trapz(AllData["Velocity"]*Yint, Yint)
+    print("The mass flow at position {d} is {m:1.4f}kg/s".format(d=x_D, m=mdot))
+    mdots.append(mdot)
+plt.figure()
+plt.scatter(x_Ds, mdots)
